@@ -22,6 +22,7 @@ import { Component, Input, QueryList, ViewChildren } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { FormArray, FormGroup } from '@angular/forms';
 import { MatExpansionPanel } from '@angular/material/expansion';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { RdioScannerAdminService } from '../../admin.service';
 import { RdioScannerAdminSystemsSelectComponent } from '../systems/select/select.component';
 
@@ -39,7 +40,11 @@ export class RdioScannerAdminApiKeysComponent {
 
     @ViewChildren(MatExpansionPanel) private panels: QueryList<MatExpansionPanel> | undefined;
 
-    constructor(private adminService: RdioScannerAdminService, private matDialog: MatDialog) { }
+    constructor(
+        private adminService: RdioScannerAdminService, 
+        private matDialog: MatDialog,
+        private snackBar: MatSnackBar
+    ) { }
 
     add(): void {
         const apiKey = this.adminService.newApiKeyForm({
@@ -59,11 +64,27 @@ export class RdioScannerAdminApiKeysComponent {
     }
 
     copy(inputElement: HTMLInputElement): void {
-        inputElement.select();
+        const value = inputElement.value;
+        if (!value) {
+            this.snackBar.open('No API key to copy', 'Close', { duration: 3000 });
+            return;
+        }
 
-        document.execCommand('copy');
-
-        inputElement.setSelectionRange(0, 0);
+        navigator.clipboard.writeText(value).then(() => {
+            this.snackBar.open('API key copied to clipboard', 'Close', { duration: 3000 });
+        }).catch(err => {
+            console.error('Failed to copy API key:', err);
+            // Fallback to older method
+            try {
+                inputElement.select();
+                document.execCommand('copy');
+                inputElement.setSelectionRange(0, 0);
+                this.snackBar.open('API key copied to clipboard', 'Close', { duration: 3000 });
+            } catch (fallbackErr) {
+                console.error('Fallback copy also failed:', fallbackErr);
+                this.snackBar.open('Failed to copy API key. Please copy manually.', 'Close', { duration: 5000 });
+            }
+        });
     }
 
     drop(event: CdkDragDrop<FormGroup[]>): void {

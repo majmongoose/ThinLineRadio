@@ -7656,6 +7656,117 @@ func (api *Api) PublicRegistrationChannelsHandler(w http.ResponseWriter, r *http
 	json.NewEncoder(w).Encode(response)
 }
 
+// RegistrationSettingsHandler returns registration settings (public/invite-only mode)
+func (api *Api) RegistrationSettingsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		api.exitWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	response := map[string]interface{}{
+		"publicRegistrationEnabled": api.Controller.Options.PublicRegistrationEnabled,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// ValidateAccessCodeHandler validates a registration or invitation code before showing the form
+func (api *Api) ValidateAccessCodeHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		api.exitWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	var request struct {
+		Code string `json:"code"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		api.exitWithError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	if request.Code == "" {
+		api.exitWithError(w, http.StatusBadRequest, "Code is required")
+		return
+	}
+
+	// First try as invitation code
+	var invitation struct {
+		Id          int64
+		Email       string
+		UserGroupId uint64
+		Status      string
+		ExpiresAt   int64
+		UsedAt      sql.NullInt64
+	}
+
+	err := api.Controller.Database.Sql.QueryRow(
+		`SELECT "userInvitationId", "email", "userGroupId", "status", "expiresAt", "usedAt" 
+		 FROM "userInvitations" WHERE "code" = $1`,
+		request.Code,
+	).Scan(&invitation.Id, &invitation.Email, &invitation.UserGroupId, &invitation.Status, &invitation.ExpiresAt, &invitation.UsedAt)
+
+	if err == nil {
+		// Check if invitation is valid
+		if invitation.Status != "active" {
+			api.exitWithError(w, http.StatusBadRequest, "Invitation has been revoked or is inactive")
+			return
+		}
+
+		if invitation.UsedAt.Valid {
+			api.exitWithError(w, http.StatusBadRequest, "Invitation code has already been used")
+			return
+		}
+
+		if invitation.ExpiresAt > 0 && time.Now().Unix() > invitation.ExpiresAt {
+			api.exitWithError(w, http.StatusBadRequest, "Invitation code has expired")
+			return
+		}
+
+		group := api.Controller.UserGroups.Get(invitation.UserGroupId)
+		if group != nil {
+			response := map[string]interface{}{
+				"valid": true,
+				"type":  "invitation",
+				"groupInfo": map[string]interface{}{
+					"name":        group.Name,
+					"description": group.Description,
+				},
+			}
+			if invitation.Email != "" {
+				response["email"] = invitation.Email
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
+	// Try as registration code
+	regCode, err := api.Controller.RegistrationCodes.Validate(request.Code)
+	if err == nil && regCode != nil {
+		group := api.Controller.UserGroups.Get(regCode.UserGroupId)
+		if group != nil {
+			response := map[string]interface{}{
+				"valid": true,
+				"type":  "registration",
+				"groupInfo": map[string]interface{}{
+					"name":        group.Name,
+					"description": group.Description,
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
+	// Code not found or invalid
+	api.exitWithError(w, http.StatusBadRequest, "Invalid or expired code")
+}
+
 // SystemAlertsHandler handles GET/POST for system alerts (system admins only)
 func (api *Api) SystemAlertsHandler(w http.ResponseWriter, r *http.Request) {
 	client := api.getClient(r)

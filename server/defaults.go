@@ -161,8 +161,8 @@ var defaults = Defaults{
 		radioReferenceUsername:      "",
 		radioReferencePassword:      "",
 		userRegistrationEnabled:     true,
-		publicRegistrationEnabled:    true,
-		publicRegistrationMode:       "both",
+		publicRegistrationEnabled:   false, // Default to invite-only
+		publicRegistrationMode:      "both",
 		stripePaywallEnabled:        false,
 		emailServiceEnabled:         false,
 		emailServiceApiKey:          "",

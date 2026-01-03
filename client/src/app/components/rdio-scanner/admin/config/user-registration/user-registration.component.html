@@ -4,23 +4,23 @@
       <h3>User Registration Settings</h3>
       
       <mat-form-field appearance="outline" class="full-width">
-        <mat-label>Enable User Registration</mat-label>
-        <mat-select formControlName="userRegistrationEnabled">
-          <mat-option [value]="true">Enabled</mat-option>
-          <mat-option [value]="false">Disabled</mat-option>
+        <mat-label>Registration Mode</mat-label>
+        <mat-select formControlName="registrationMode">
+          <mat-option value="invite">Invite Only (Requires registration or invitation code)</mat-option>
+          <mat-option value="public" [disabled]="!hasPublicRegistrationGroup">Public Registration (Anyone can sign up)</mat-option>
         </mat-select>
+        <mat-hint *ngIf="!hasPublicRegistrationGroup" style="color: #f44336;">
+          Public Registration requires a Public Registration Group. Create one in the Groups section first.
+        </mat-hint>
+        <mat-hint *ngIf="hasPublicRegistrationGroup && userRegistrationForm.get('registrationMode')?.value === 'invite'">
+          Users must have a registration code or invitation to create an account
+        </mat-hint>
+        <mat-hint *ngIf="hasPublicRegistrationGroup && userRegistrationForm.get('registrationMode')?.value === 'public'">
+          Anyone can create an account without a code (optional codes still work)
+        </mat-hint>
       </mat-form-field>
 
-      <mat-form-field appearance="outline" class="full-width">
-        <mat-label>Enable Public Registration</mat-label>
-        <mat-select formControlName="publicRegistrationEnabled">
-          <mat-option [value]="true">Enabled</mat-option>
-          <mat-option [value]="false">Disabled</mat-option>
-        </mat-select>
-        <mat-hint>Allow users to register without a code (requires a public registration group)</mat-hint>
-      </mat-form-field>
-
-      <mat-form-field appearance="outline" class="full-width" *ngIf="userRegistrationForm.get('publicRegistrationEnabled')?.value">
+      <mat-form-field appearance="outline" class="full-width" *ngIf="userRegistrationForm.get('registrationMode')?.value === 'public'">
         <mat-label>Public Registration Mode</mat-label>
         <mat-select formControlName="publicRegistrationMode">
           <mat-option value="codes">Codes Only</mat-option>

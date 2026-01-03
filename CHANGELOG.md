@@ -1,6 +1,40 @@
 # Change log
 
-## Version 7.0 Beta 4 - January 2, 2025
+## Version 7.0 Beta 3 - January 2, 2025
+
+### User Registration Improvements
+- **Simplified registration mode settings**
+  - Removed confusing "Enable User Registration" toggle (now always enabled)
+  - Replaced "Enable Public Registration" with clear "Registration Mode" dropdown
+  - Two modes: "Invite Only" (requires code) or "Public Registration" (anyone can sign up)
+  - "Public Registration" option automatically disabled until a Public Registration Group is created
+  - Context-sensitive hints explain what each mode does
+
+- **Enhanced invite-only security**
+  - Users must validate their invitation/registration code BEFORE seeing the form
+  - Code validation gateway prevents unauthorized form access
+  - Yellow notice displays: "Registration is by invitation only"
+  - After successful validation, green success message: "Invite Code Validated, Please Fill Out the Form"
+  - All public group information (pricing, channels) hidden in invite-only mode
+  - No API calls made for public data when in invite-only mode
+
+- **New backend endpoints**
+  - `/api/registration-settings` - Returns current registration mode (public/invite-only)
+  - `/api/user/validate-access-code` - Validates invitation or registration codes before form access
+  - Validates both invitation codes and registration codes
+  - Checks expiration, usage status, and activation status
+  - Returns group information upon successful validation
+
+- **Improved user experience**
+  - Default registration mode is now "Invite Only" (more secure)
+  - Clear error messages for invalid or expired codes
+  - Pre-fills email if provided in invitation
+  - Seamless flow from code validation to form completion
+  - Works on both main registration page and auth screen
+
+- **Files modified**
+  - Frontend: auth-screen component, user-registration component
+  - Backend: api.go, main.go, options.go, defaults.go
 
 ### Docker Support (UNTESTED)
 - **Complete Docker deployment solution added**
@@ -44,8 +78,6 @@
   - README.md: Added Docker quick start section
 
 ⚠️ **IMPORTANT NOTE**: This Docker implementation is **UNTESTED** and provided as-is. While comprehensive documentation and automated tests are included, the solution has not been tested in a live environment. Users should test thoroughly in development before deploying to production.
-
-## Version 7.0 Beta 3 - January 2, 2025
 
 ### Scanner Customization Mode
 - **New full-screen customization interface for scanner layout**

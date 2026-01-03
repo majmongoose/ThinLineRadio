@@ -306,6 +306,8 @@ func main() {
 	http.HandleFunc("/api/user/login", securityHeadersWrapper(rateLimitWrapper(userLoginHandler)).ServeHTTP)
 	http.HandleFunc("/api/public-registration-info", wrapHandler(http.HandlerFunc(controller.Api.PublicRegistrationInfoHandler)).ServeHTTP)
 	http.HandleFunc("/api/public-registration-channels", wrapHandler(http.HandlerFunc(controller.Api.PublicRegistrationChannelsHandler)).ServeHTTP)
+	http.HandleFunc("/api/registration-settings", wrapHandler(http.HandlerFunc(controller.Api.RegistrationSettingsHandler)).ServeHTTP)
+	http.HandleFunc("/api/user/validate-access-code", wrapHandler(http.HandlerFunc(controller.Api.ValidateAccessCodeHandler)).ServeHTTP)
 	http.HandleFunc("/api/user/verify", wrapHandler(http.HandlerFunc(controller.Api.UserVerifyHandler)).ServeHTTP)
 	http.HandleFunc("/api/user/resend-verification", wrapHandler(http.HandlerFunc(controller.Api.UserResendVerificationHandler)).ServeHTTP)
 	http.HandleFunc("/api/user/transfer-to-public", wrapHandler(http.HandlerFunc(controller.Api.UserTransferToPublicHandler)).ServeHTTP)

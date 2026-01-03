@@ -38,14 +38,19 @@ export class RdioScannerAdminUserRegistrationComponent implements OnInit, OnChan
   testEmailError: string = '';
   testEmailSuccess: string = '';
   window = window; // Expose window to template
+  hasPublicRegistrationGroup: boolean = false;
+  registrationModeValue: string = 'invite'; // 'invite' or 'public'
 
   constructor(private fb: FormBuilder, private http: HttpClient, private cdr: ChangeDetectorRef) {}
 
   ngOnInit() {
+    // Load groups to check for public registration group
+    this.loadGroups();
+
     // Create a standalone form for user registration
     this.userRegistrationForm = this.fb.group({
-      userRegistrationEnabled: new FormControl(false),
-      publicRegistrationEnabled: new FormControl(true),
+      userRegistrationEnabled: new FormControl(true), // Always enabled now
+      publicRegistrationEnabled: new FormControl(false), // Default to false (invite-only)
       publicRegistrationMode: new FormControl('both'),
       stripePaywallEnabled: new FormControl(false),
       emailServiceEnabled: new FormControl(false),
@@ -69,6 +74,7 @@ export class RdioScannerAdminUserRegistrationComponent implements OnInit, OnChan
       stripeWebhookSecret: new FormControl(''),
       stripeGracePeriodDays: new FormControl(0),
       baseUrl: new FormControl(''),
+      registrationMode: new FormControl('invite'), // New field for the UI dropdown
     });
 
     // Update logo URL when filename changes (but debounce to avoid loops)
@@ -82,6 +88,23 @@ export class RdioScannerAdminUserRegistrationComponent implements OnInit, OnChan
         // Clear logo URL if filename is empty
         this.logoUrl = '';
         this.imageErrorRetryCount = 0;
+      }
+    });
+
+    // Handle registration mode changes
+    this.userRegistrationForm.get('registrationMode')?.valueChanges.subscribe((mode) => {
+      if (!this.isSyncing) {
+        // Map UI dropdown to backend fields
+        if (mode === 'public') {
+          this.userRegistrationForm.patchValue({
+            publicRegistrationEnabled: true
+          }, { emitEvent: false });
+        } else { // 'invite'
+          this.userRegistrationForm.patchValue({
+            publicRegistrationEnabled: false
+          }, { emitEvent: false });
+        }
+        this.syncToParentForm();
       }
     });
     
@@ -140,9 +163,11 @@ export class RdioScannerAdminUserRegistrationComponent implements OnInit, OnChan
       // Check if we received the options form group directly
       if (this.form && this.form.get('userRegistrationEnabled') !== null) {
         // This is the options form group directly
+        const publicRegEnabled = this.form.get('publicRegistrationEnabled')?.value ?? false;
+        
         this.userRegistrationForm.patchValue({
-          userRegistrationEnabled: this.form.get('userRegistrationEnabled')?.value || false,
-          publicRegistrationEnabled: this.form.get('publicRegistrationEnabled')?.value ?? true,
+          userRegistrationEnabled: true, // Always true now
+          publicRegistrationEnabled: publicRegEnabled,
           publicRegistrationMode: this.form.get('publicRegistrationMode')?.value || 'both',
           stripePaywallEnabled: this.form.get('stripePaywallEnabled')?.value || false,
           emailServiceEnabled: this.form.get('emailServiceEnabled')?.value || false,
@@ -166,14 +191,17 @@ export class RdioScannerAdminUserRegistrationComponent implements OnInit, OnChan
           stripeWebhookSecret: this.form.get('stripeWebhookSecret')?.value || '',
           stripeGracePeriodDays: this.form.get('stripeGracePeriodDays')?.value || 0,
           baseUrl: this.form.get('baseUrl')?.value || '',
+          registrationMode: publicRegEnabled ? 'public' : 'invite',
         }, { emitEvent: false }); // Don't emit events to prevent loops
       } else if (this.form && this.form.get('options')) {
         // This is the full form, get the options form group
         const options = this.form.get('options');
         if (options) {
+          const publicRegEnabled = options.get('publicRegistrationEnabled')?.value ?? false;
+          
           this.userRegistrationForm.patchValue({
-            userRegistrationEnabled: options.get('userRegistrationEnabled')?.value || false,
-            publicRegistrationEnabled: options.get('publicRegistrationEnabled')?.value ?? true,
+            userRegistrationEnabled: true, // Always true now
+            publicRegistrationEnabled: publicRegEnabled,
             publicRegistrationMode: options.get('publicRegistrationMode')?.value || 'both',
             stripePaywallEnabled: options.get('stripePaywallEnabled')?.value || false,
             emailServiceEnabled: options.get('emailServiceEnabled')?.value || false,
@@ -197,6 +225,7 @@ export class RdioScannerAdminUserRegistrationComponent implements OnInit, OnChan
             stripeWebhookSecret: options.get('stripeWebhookSecret')?.value || '',
             stripeGracePeriodDays: options.get('stripeGracePeriodDays')?.value || 0,
             baseUrl: options.get('baseUrl')?.value || '',
+            registrationMode: publicRegEnabled ? 'public' : 'invite',
           }, { emitEvent: false }); // Don't emit events to prevent loops
         }
       }
@@ -221,7 +250,7 @@ export class RdioScannerAdminUserRegistrationComponent implements OnInit, OnChan
       // This is the options form group directly - update each field individually
       const values = this.userRegistrationForm.value;
       this.form.patchValue({
-        userRegistrationEnabled: values.userRegistrationEnabled,
+        userRegistrationEnabled: true, // Always true now
         publicRegistrationEnabled: values.publicRegistrationEnabled,
         publicRegistrationMode: values.publicRegistrationMode,
         stripePaywallEnabled: values.stripePaywallEnabled,
@@ -254,7 +283,7 @@ export class RdioScannerAdminUserRegistrationComponent implements OnInit, OnChan
       if (options) {
         const values = this.userRegistrationForm.value;
         options.patchValue({
-          userRegistrationEnabled: values.userRegistrationEnabled,
+          userRegistrationEnabled: true, // Always true now
           publicRegistrationEnabled: values.publicRegistrationEnabled,
           publicRegistrationMode: values.publicRegistrationMode,
           stripePaywallEnabled: values.stripePaywallEnabled,
@@ -592,5 +621,29 @@ export class RdioScannerAdminUserRegistrationComponent implements OnInit, OnChan
           this.cdr.detectChanges();
         }
       });
+  }
+
+  async loadGroups(): Promise<void> {
+    try {
+      // Get auth token from session storage
+      const token = sessionStorage.getItem('rdio-scanner-admin-token');
+      if (!token) {
+        return;
+      }
+
+      const headers = new HttpHeaders({
+        'Authorization': token
+      });
+
+      const response: any = await this.http.get(`${window.location.origin}/api/admin/groups`, { headers }).toPromise();
+      const groups = response?.groups || [];
+      
+      // Check if any group has isPublicRegistration set to true
+      this.hasPublicRegistrationGroup = groups.some((g: any) => g.isPublicRegistration === true);
+      this.cdr.detectChanges();
+    } catch (error) {
+      console.error('Error loading groups:', error);
+      this.hasPublicRegistrationGroup = false;
+    }
   }
 }

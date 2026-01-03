@@ -21,6 +21,7 @@ import { Component, Inject, OnInit } from '@angular/core';
 import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
+import { MatSnackBar } from '@angular/material/snack-bar';
 
 @Component({
   selector: 'rdio-scanner-recover-api-key-dialog',
@@ -252,7 +253,8 @@ export class RecoverAPIKeyDialogComponent implements OnInit {
     public dialogRef: MatDialogRef<RecoverAPIKeyDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: { relayServerURL: string },
     private fb: FormBuilder,
-    private http: HttpClient
+    private http: HttpClient,
+    private snackBar: MatSnackBar
   ) {
     this.recoveryForm = this.fb.group({
       serverURL: ['', [Validators.required]],
@@ -374,9 +376,10 @@ export class RecoverAPIKeyDialogComponent implements OnInit {
     if (!this.recoveredApiKey) return;
     
     navigator.clipboard.writeText(this.recoveredApiKey).then(() => {
-      // Could show a snackbar here if needed
+      this.snackBar.open('API key copied to clipboard', 'Close', { duration: 3000 });
     }).catch(err => {
       console.error('Failed to copy:', err);
+      this.snackBar.open('Failed to copy API key. Please copy manually.', 'Close', { duration: 5000 });
     });
   }
 

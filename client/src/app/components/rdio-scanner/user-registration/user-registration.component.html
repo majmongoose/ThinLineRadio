@@ -2,14 +2,22 @@
   <div class="registration-form">
     <h2>Create Account</h2>
     
+    <!-- Invite Only Notice -->
+    <div class="invite-only-notice" *ngIf="isInviteOnlyMode && !invitationCode && !success" style="padding: 15px; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; margin-bottom: 20px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <mat-icon style="color: #856404;">info</mat-icon>
+        <strong style="color: #856404;">Registration is by invitation only - you need a valid invitation or registration code to create an account.</strong>
+      </div>
+    </div>
+    
     <!-- Invitation Info -->
     <div class="invitation-info" *ngIf="invitationGroupName && !success">
       <mat-icon>mail</mat-icon>
       <p>You've been invited to join <strong>{{ invitationGroupName }}</strong>!</p>
     </div>
     
-    <!-- Public Registration Group Info -->
-    <div class="public-registration-info" *ngIf="!success">
+    <!-- Public Registration Group Info (only show when NOT invite-only mode) -->
+    <div class="public-registration-info" *ngIf="!success && !isInviteOnlyMode">
       <div class="info-section" *ngIf="publicGroupInfo?.name">
         <h3>{{ publicGroupInfo.name }}</h3>
         <p *ngIf="publicGroupInfo?.description">{{ publicGroupInfo.description }}</p>
@@ -26,8 +34,8 @@
         </div>
       </div>
       
-      <!-- Available Channels - Always visible -->
-      <div class="channels-section">
+      <!-- Available Channels - Only visible in public mode -->
+      <div class="channels-section" *ngIf="!isInviteOnlyMode">
         <button mat-button (click)="toggleChannels()" class="channels-toggle">
           <mat-icon>{{ showChannels ? 'expand_less' : 'expand_more' }}</mat-icon>
           <span>View Available Channels ({{ availableChannels.length }})</span>
@@ -68,7 +76,28 @@
       </div>
     </div>
     
-    <form [formGroup]="registrationForm" (ngSubmit)="onSubmit()" *ngIf="!success">
+    <!-- Code Validation Step (Invite-Only Mode) -->
+    <div class="code-validation-step" *ngIf="isInviteOnlyMode && !codeValidated && !invitationCode && !success">
+      <p style="margin-bottom: 20px;">Enter your invitation or registration code to continue:</p>
+      
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Invitation/Registration Code</mat-label>
+        <input matInput type="text" [(ngModel)]="pendingAccessCode" placeholder="Enter your code" required>
+      </mat-form-field>
+
+      <div class="error-message" *ngIf="codeValidationError" style="margin-bottom: 15px;">
+        {{ codeValidationError }}
+      </div>
+
+      <button mat-raised-button color="primary" (click)="validateAccessCode()" 
+              [disabled]="!pendingAccessCode || validatingCode" class="full-width">
+        <mat-spinner diameter="20" *ngIf="validatingCode"></mat-spinner>
+        <span *ngIf="!validatingCode">Validate Code</span>
+      </button>
+    </div>
+    
+    <!-- Registration Form (shown after code validation in invite-only, or immediately in public mode) -->
+    <form [formGroup]="registrationForm" (ngSubmit)="onSubmit()" *ngIf="!success && (!isInviteOnlyMode || codeValidated || invitationCode)">
       <mat-form-field appearance="outline" class="full-width">
         <mat-label>Email</mat-label>
         <input matInput type="email" formControlName="email" required>
@@ -135,14 +164,16 @@
         </mat-error>
       </mat-form-field>
 
-      <mat-form-field appearance="outline" class="full-width" *ngIf="!invitationCode">
+      <!-- Code field for public mode or already validated -->
+      <mat-form-field appearance="outline" class="full-width" *ngIf="!invitationCode && !isInviteOnlyMode">
         <mat-label>Invite Code (Optional)</mat-label>
-        <input matInput type="text" formControlName="accessCode" placeholder="Enter invite code if you have one">
+        <input matInput type="text" formControlName="accessCode" 
+               placeholder="Enter invite code if you have one">
         <mat-hint>If you have an invite code, enter it here. Otherwise, leave blank for public registration.</mat-hint>
       </mat-form-field>
       
-      <!-- Hidden field for invitation code when using invitation link -->
-      <input type="hidden" formControlName="accessCode" *ngIf="invitationCode">
+      <!-- Hidden field for invitation code when using invitation link OR validated code in invite-only mode -->
+      <input type="hidden" formControlName="accessCode" *ngIf="invitationCode || (isInviteOnlyMode && codeValidated)">
 
       <div class="error-message" *ngIf="error">
         {{ error }}

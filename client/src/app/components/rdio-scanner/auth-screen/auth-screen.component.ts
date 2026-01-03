@@ -66,6 +66,11 @@ export class RdioScannerAuthScreenComponent implements OnInit, OnDestroy, AfterV
   availableChannels: any[] = [];
   loadingChannels = false;
   showChannels = false;
+  isInviteOnlyMode = true; // Default to true
+  codeValidated = false;
+  pendingAccessCode = '';
+  validatingCode = false;
+  codeValidationError = '';
   
   private connectionLimitAlertShown = false;
   private eventSubscription: Subscription | undefined;
@@ -184,9 +189,8 @@ export class RdioScannerAuthScreenComponent implements OnInit, OnDestroy, AfterV
       }
     });
     
-    // Load public registration info and channels
-    this.loadPublicRegistrationInfo();
-    this.loadAvailableChannels();
+    // Load registration settings first to determine if invite-only
+    this.loadRegistrationSettings();
     
     // Check for Stripe checkout success/cancel parameters
     const urlParams = new URLSearchParams(window.location.search);
@@ -804,6 +808,32 @@ export class RdioScannerAuthScreenComponent implements OnInit, OnDestroy, AfterV
     this.showCheckout = false;
   }
 
+
+  loadRegistrationSettings(): void {
+    console.log('[AUTH-SCREEN] loadRegistrationSettings called');
+    this.http.get<any>('/api/registration-settings').subscribe({
+      next: (settings) => {
+        console.log('[AUTH-SCREEN] Registration settings received:', settings);
+        this.isInviteOnlyMode = !settings.publicRegistrationEnabled;
+        console.log('[AUTH-SCREEN] isInviteOnlyMode set to:', this.isInviteOnlyMode);
+        
+        // Only load public info if NOT in invite-only mode
+        if (!this.isInviteOnlyMode) {
+          console.log('[AUTH-SCREEN] Loading public info - public mode');
+          this.loadPublicRegistrationInfo();
+          this.loadAvailableChannels();
+        } else {
+          console.log('[AUTH-SCREEN] Skipping public info - invite-only mode');
+        }
+      },
+      error: (error) => {
+        console.error('[AUTH-SCREEN] Error loading registration settings:', error);
+        // Default to invite-only if we can't load settings
+        this.isInviteOnlyMode = true;
+      }
+    });
+  }
+
   loadPublicRegistrationInfo(): void {
     this.loadingGroupInfo = true;
     this.http.get<any>('/api/public-registration-info').subscribe({
@@ -872,6 +902,48 @@ export class RdioScannerAuthScreenComponent implements OnInit, OnDestroy, AfterV
     }
 
     return result;
+  }
+
+  validateAccessCode(): void {
+    if (!this.pendingAccessCode || this.validatingCode) {
+      return;
+    }
+
+    this.validatingCode = true;
+    this.codeValidationError = '';
+
+    this.http.post<any>('/api/user/validate-access-code', {
+      code: this.pendingAccessCode
+    }).subscribe({
+      next: (response) => {
+        this.validatingCode = false;
+        if (response.valid) {
+          this.codeValidated = true;
+          
+          // Set the code in the form
+          this.registerForm.patchValue({
+            accessCode: this.pendingAccessCode
+          });
+          
+          // If email was provided in invitation, pre-fill it
+          if (response.email) {
+            this.registerForm.patchValue({
+              email: response.email
+            });
+          }
+          
+          this.snackBar.open('Code validated successfully!', 'Close', {
+            duration: 3000
+          });
+        } else {
+          this.codeValidationError = response.message || 'Invalid code';
+        }
+      },
+      error: (error) => {
+        this.validatingCode = false;
+        this.codeValidationError = error.error?.message || error.error?.error || 'Invalid or expired code';
+      }
+    });
   }
 
   closeCheckoutSuccess(): void {

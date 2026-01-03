@@ -43,6 +43,15 @@ export class RdioScannerUserRegistrationComponent implements OnInit {
   loadingChannels = false;
   showChannels = false;
   
+  // Invite only mode
+  isInviteOnlyMode = true; // Default to true until we load settings
+  codeValidated = false;
+  pendingAccessCode = '';
+  validatingCode = false;
+  codeValidationError = '';
+  validatedGroupInfo: any = null;
+  loadingSettings = true; // Track if we're still loading settings
+  
   // Resend verification email rate limiting
   resendDisabled = false;
   resendCooldown = 0;
@@ -72,8 +81,8 @@ export class RdioScannerUserRegistrationComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.loadPublicRegistrationInfo();
-    this.loadAvailableChannels();
+    console.log('UserRegistration ngOnInit - isInviteOnlyMode initial:', this.isInviteOnlyMode);
+    this.loadRegistrationSettings();
     
     // Check for invitation code in URL or sessionStorage (captured before Angular loaded)
     this.route.queryParams.subscribe(params => {
@@ -98,6 +107,89 @@ export class RdioScannerUserRegistrationComponent implements OnInit {
     });
   }
   
+  loadRegistrationSettings(): void {
+    console.log('loadRegistrationSettings called');
+    this.loadingSettings = true;
+    this.http.get<any>('/api/registration-settings').subscribe({
+      next: (settings) => {
+        console.log('Registration settings received:', settings);
+        this.isInviteOnlyMode = !settings.publicRegistrationEnabled;
+        this.loadingSettings = false;
+        
+        console.log('Registration mode loaded - publicRegistrationEnabled:', settings.publicRegistrationEnabled, 'isInviteOnlyMode:', this.isInviteOnlyMode);
+        
+        // Only load public info if NOT in invite-only mode
+        if (!this.isInviteOnlyMode) {
+          console.log('Loading public info because NOT invite-only');
+          this.loadPublicRegistrationInfo();
+          this.loadAvailableChannels();
+        } else {
+          console.log('Skipping public info load - invite-only mode');
+        }
+        
+        // In public mode, code is optional
+        // In invite-only mode with invitation link, code is already set
+        // In invite-only mode without invitation link, code will be validated separately
+        const accessCodeControl = this.registrationForm.get('accessCode');
+        if (!this.isInviteOnlyMode) {
+          accessCodeControl?.clearValidators();
+        }
+        accessCodeControl?.updateValueAndValidity();
+      },
+      error: (error) => {
+        console.error('Error loading registration settings:', error);
+        // Default to invite-only if we can't load settings
+        this.isInviteOnlyMode = true;
+        this.loadingSettings = false;
+      }
+    });
+  }
+
+  validateAccessCode(): void {
+    if (!this.pendingAccessCode || this.validatingCode) {
+      return;
+    }
+
+    this.validatingCode = true;
+    this.codeValidationError = '';
+
+    // Try to validate as both invitation code and registration code
+    this.http.post<any>('/api/user/validate-access-code', {
+      code: this.pendingAccessCode
+    }).subscribe({
+      next: (response) => {
+        this.validatingCode = false;
+        if (response.valid) {
+          this.codeValidated = true;
+          this.validatedGroupInfo = response.groupInfo;
+          
+          // Set the code in the form
+          this.registrationForm.patchValue({
+            accessCode: this.pendingAccessCode
+          });
+          
+          // If email was provided in invitation, pre-fill it
+          if (response.email) {
+            this.registrationForm.patchValue({
+              email: response.email
+            });
+          }
+          
+          this.snackBar.open('Code validated successfully!', 'Close', {
+            duration: 3000,
+            panelClass: ['success-snackbar']
+          });
+        } else {
+          this.codeValidationError = response.message || 'Invalid code';
+        }
+      },
+      error: (error) => {
+        this.validatingCode = false;
+        this.codeValidationError = error.error?.message || error.error?.error || 'Invalid or expired code';
+      }
+    });
+  }
+  
   handleInvitation(inviteCode: string): void {
     // Validate invitation code
     this.http.get(`/api/user/validate-invitation?code=${inviteCode}`).subscribe({
@@ -112,6 +204,7 @@ export class RdioScannerUserRegistrationComponent implements OnInit {
           this.registrationForm.patchValue({ accessCode: inviteCode });
           this.invitationCode = inviteCode;
           this.invitationGroupName = response.groupName;
+          this.codeValidated = true; // Mark as validated so form shows
           
           // Show success message
           this.snackBar.open(`You've been invited to join ${response.groupName}! Please complete your registration.`, 'Close', {
