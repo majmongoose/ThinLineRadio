@@ -88,13 +88,8 @@ WORKDIR /app
 # Copy binary from builder stage
 COPY --from=server-builder /build/server/thinline-radio .
 
-# Copy documentation and examples
-COPY LICENSE ./
-COPY README.md ./
-COPY docs/setup-and-administration.md ./docs/
-COPY docs/examples/*.csv ./docs/examples/ 2>/dev/null || true
-COPY docs/examples/*.json ./docs/examples/ 2>/dev/null || true
-COPY docs/examples/*.PNG ./docs/examples/ 2>/dev/null || true
+# Copy documentation (only essential files, optional ones can fail)
+COPY LICENSE README.md ./
 
 # Ensure binary is executable
 RUN chmod +x thinline-radio && \

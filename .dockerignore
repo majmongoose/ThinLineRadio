@@ -118,9 +118,7 @@ Dockerfile.local
 CONTRIBUTING.md
 COMPILING.md
 CHANGELOG.md
-*.md
-!README.md
-!LICENSE
+# Keep README.md and docs/ directory
 
 # =============================================================================
 # Platform Specific
